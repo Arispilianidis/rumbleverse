@@ -222,6 +222,7 @@ kbd { font: 700 13px/1.2 var(--body); background: #2a1f55; border: 2px solid var
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="sim.js"></script>
 <script src="net.js"></script>
+<script src="ice.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script>
 (function () {
@@ -828,13 +829,17 @@ function wrapConn(conn, peer) {
   conn.on('error', function () { if (l.onclose) l.onclose(); });
   return l;
 }
+function peerOpts() {
+  var ice = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }].concat(window.RR_ICE || []);
+  return { config: { iceServers: ice } };
+}
 var peerTransport = {
   available: function () { return typeof window.Peer !== 'undefined'; },
   host: function (cb) {
     var peer = null, tries = 0, linked = false, dead = false;
     function attempt() {
       var code = randCode();
-      peer = new window.Peer('rrumble-' + code);
+      peer = new window.Peer('rrumble-' + code, peerOpts());
       peer.on('open', function () { cb.onCode(code); });
       peer.on('error', function (e) {
         if (dead) return;
@@ -851,7 +856,7 @@ var peerTransport = {
     return function () { dead = true; try { peer.destroy(); } catch (e) {} };
   },
   join: function (code, cb) {
-    var peer = new window.Peer(), dead = false;
+    var peer = new window.Peer(undefined, peerOpts()), dead = false;
     peer.on('open', function () {
       var conn = peer.connect('rrumble-' + code, { reliable: false, serialization: 'json' });
       conn.on('open', function () { cb.onLink(wrapConn(conn, peer)); });
@@ -955,12 +960,13 @@ function doJoin() {
   if (code.length !== 4) { setStatus('Enter the 4-letter code.', true); return; }
   G.audioOK = true; if (cancelPending) cancelPending();
   setStatus('Connecting…'); pendingLock(true);
+  var slow = setTimeout(function () { if (!done) setStatus('Still trying. Strict networks can take longer…'); }, 8000);
   var done = false, cancel = transport().join(code, {
-    onLink: function (link) { done = true; startOnline('guest', link); },
+    onLink: function (link) { done = true; clearTimeout(slow); startOnline('guest', link); },
     onError: function (m) { done = true; setStatus(m, true); pendingLock(false); }
   });
-  var to = setTimeout(function () { if (!done) { done = true; cancel(); setStatus('Could not connect. Check the code, or ask the host to try again.', true); pendingLock(false); } }, 15000);
-  cancelPending = function () { done = true; clearTimeout(to); cancel(); };
+  var to = setTimeout(function () { if (!done) { done = true; cancel(); setStatus('Could not connect. Check the code. If it is right, one of your networks blocks direct connections and the game needs a relay server.', true); pendingLock(false); } }, 30000);
+  cancelPending = function () { done = true; clearTimeout(to); clearTimeout(slow); cancel(); };
 }
 $('joinBtn').addEventListener('click', doJoin);
 $('codeIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); });
