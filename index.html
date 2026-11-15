@@ -150,6 +150,8 @@ kbd { font: 700 13px/1.2 var(--body); background: #2a1f55; border: 2px solid var
 #netStatus { margin: 0; min-height: 1.4em; color: var(--ok); }
 #netStatus.bad { color: var(--danger); }
 #netinfo { position: fixed; top: calc(60px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 2; font-size: 12px; color: rgba(255,246,232,.7); text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
+body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 8; background: var(--panel); color: var(--ink); border: 2px solid var(--edge); border-radius: 999px; padding: 8px 18px; font-weight: 700; pointer-events: none; }
 .touch { display: none; margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 14px; }
 @media (pointer: coarse) { .touch { display: block; } }
 @media (prefers-reduced-motion: reduce) { #banner.go h2 { animation: none; opacity: 1; } .pop { animation-duration: 1.2s; } }
@@ -177,6 +179,8 @@ kbd { font: 700 13px/1.2 var(--body); background: #2a1f55; border: 2px solid var
   <div class="hint" id="hint"></div>
   <div id="netinfo"></div>
 </div>
+
+<div id="toast" role="status" hidden></div>
 
 <div id="banner" aria-live="polite"><h2 id="bt"></h2><p id="bs"></p></div>
 
@@ -215,7 +219,7 @@ kbd { font: 700 13px/1.2 var(--body); background: #2a1f55; border: 2px solid var
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
     <p class="rps"><span><b>Light</b> chains up to four hits. <b>Heavy</b> knocks down and crushes guard.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
-    <p class="fine">Gamepad: stick to move, X light, Y heavy, B grab, A dodge, bumper to block. Esc returns here. M mutes.</p>
+    <p class="fine">Controller: stick or D-pad to move, X light, Y heavy, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
 
@@ -658,6 +662,7 @@ function sampleHuman(i, cyaw) {
   if (gp) {
     var ax = gp.axes[0] || 0, ay = -(gp.axes[1] || 0);
     if (Math.hypot(ax, ay) > 0.25) { x += ax; y += ay; }
+    if (btn(gp, 14)) x -= 1; if (btn(gp, 15)) x += 1; if (btn(gp, 13)) y -= 1; if (btn(gp, 12)) y += 1;
     var now = [btn(gp, 2), btn(gp, 3), btn(gp, 1), btn(gp, 0)], prev = padPrev[i] || [false, false, false, false];
     if (now[0] && !prev[0]) inp.light = true; if (now[1] && !prev[1]) inp.heavy = true;
     if (now[2] && !prev[2]) inp.grab = true; if (now[3] && !prev[3]) inp.dodge = true;
@@ -793,6 +798,7 @@ function frame(nowMs) {
   var rdt = Math.min(0.1, (nowMs - last) / 1000); last = nowMs;
   var now = nowMs / 1000;
   if (G.net) S = G.net.state();
+  padSystem();
   collectInputs();
   if (!G.frozen) {
     acc += rdt;
@@ -973,6 +979,59 @@ $('codeIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') do
 function autoJoin() {
   var m = /[?&]join=([A-Za-z]{4})/.exec(location.search);
   if (m) { openOnline(); $('codeIn').value = m[1].toUpperCase(); if (transportOK()) doJoin(); }
+}
+
+/* ---------- controller: menus, rematch, leave ---------- */
+var navPrev = {}, padSlot = 0, toastT = 0;
+function edge(key, down) { var was = navPrev[key]; navPrev[key] = down; return down && !was; }
+function toast(t) {
+  var el = $('toast'); el.textContent = t; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(function () { el.hidden = true; }, 2600);
+}
+window.addEventListener('gamepadconnected', function (e) { toast('Controller connected'); });
+window.addEventListener('gamepaddisconnected', function () { toast('Controller disconnected'); });
+window.addEventListener('pointerdown', function () { document.body.classList.remove('padnav'); });
+function menuItems() {
+  return Array.prototype.filter.call(menuEl.querySelectorAll('button:not([disabled]), input'), function (e) { return e.offsetParent; });
+}
+function focusMove(dir) {
+  var items = menuItems(); if (!items.length) return;
+  var i = items.indexOf(document.activeElement);
+  items[(i + dir + items.length) % items.length].focus();
+}
+function codePad(el, up, down, left, right, a) {
+  var v = (el.value.toUpperCase().replace(/[^A-Z]/g, '') + 'AAAA').slice(0, 4).split('');
+  el.value = v.join('');
+  if (up || down) {
+    var idx = CODE_ALPHA.indexOf(v[padSlot]); if (idx < 0) idx = 0;
+    v[padSlot] = CODE_ALPHA[(idx + (up ? 1 : -1) + CODE_ALPHA.length) % CODE_ALPHA.length]; el.value = v.join('');
+  }
+  if (left) { if (padSlot > 0) padSlot--; else focusMove(-1); }
+  if (right) { if (padSlot < 3) padSlot++; else focusMove(1); }
+  if (a) doJoin();
+  try { el.setSelectionRange(padSlot, padSlot + 1); } catch (e) {}
+}
+function menuNav(up, down, left, right, a, b, start) {
+  document.body.classList.add('padnav');
+  var items = menuItems(); if (!items.length) return;
+  var cur = document.activeElement, i = items.indexOf(cur);
+  if (i < 0) { items[0].focus(); return; }
+  if (start && $('play1').offsetParent) { $('play1').click(); return; }
+  if (b) { var back = $('onlineBack'); if (back.offsetParent) back.click(); return; }
+  if (cur.id === 'codeIn') { codePad(cur, up, down, left, right, a); return; }
+  if (up || left) focusMove(-1); else if (down || right) focusMove(1);
+  else if (a) cur.click();
+}
+function padSystem() {
+  var gp = pads()[0]; if (!gp) { navPrev = {}; return; }
+  var ay = gp.axes[1] || 0, ax = gp.axes[0] || 0;
+  var start = edge('st', btn(gp, 9)), back = edge('bk', btn(gp, 8)), a = edge('a', btn(gp, 0)), b = edge('b', btn(gp, 1));
+  var up = edge('up', btn(gp, 12) || ay < -0.6), down = edge('dn', btn(gp, 13) || ay > 0.6);
+  var left = edge('lf', btn(gp, 14) || ax < -0.6), right = edge('rt', btn(gp, 15) || ax > 0.6);
+  G.audioOK = G.audioOK || start || a;
+  if (!menuEl.hidden) { if (start || back || a || b || up || down || left || right) menuNav(up, down, left, right, a, b, start); return; }
+  if (S.phase === 'end' && (start || a)) { if (G.mode === 'online') requestRematch(); else startMatch(G.mode); }
+  else if (back) toMenu();
 }
 
 /* ---------- menu wiring ---------- */
