@@ -217,7 +217,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <span>Block (hold)</span><span><kbd>R</kbd></span><span><kbd>Right Shift</kbd></span>
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
-    <p class="rps"><span><b>Attack</b> chains up to four hits, and the fourth knocks down.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
+    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
     <p class="fine">Controller: stick or D-pad to move, X attack, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
@@ -558,11 +558,17 @@ function poseFighter(v, f, dt, now) {
     else if (f.blocking) { o.pX = o.nX = -2.15; o.pO = o.nO = -0.5; o.tx = 0.25; o.hy = HIP_Y - 0.12; o.hx = 0.15; }
     else { o.hy = HIP_Y + Math.sin(now * 5 + v.idx) * 0.015; }
   } else if (s === 'light' && mv) {
-    var side = f.punchSide, A = side > 0 ? 'p' : 'n', O = side > 0 ? 'n' : 'p';
-    o[O + 'X'] = -1.9; o[O + 'O'] = -0.4; o.k = 14;
-    if (t < mv.start) { o[A + 'X'] = -0.2; o[A + 'O'] = 0.7; o.ty = 0.5 * side; o.k = 32; }
-    else if (t < mv.start + mv.active) { o[A + 'X'] = -1.62; o[A + 'O'] = -0.05; o.ty = -0.55 * side; o.k = 50; }
-    else { o[A + 'X'] = -1.0; o[A + 'O'] = 0.1; o.ty = -0.2 * side; }
+    if (f.chain === 3) {                       // finisher: both fists overhead, then a slam
+      if (t < mv.start) { o.pX = o.nX = -3.0; o.pO = o.nO = 0.15; o.tx = -0.4; o.hy = HIP_Y - 0.04; o.k = 18; }
+      else if (t < mv.start + mv.active) { o.pX = o.nX = -1.1; o.pO = o.nO = -0.1; o.tx = 0.75; o.hy = HIP_Y - 0.12; o.k = 50; }
+      else { o.pX = o.nX = -0.9; o.tx = 0.6; o.hy = HIP_Y - 0.1; o.k = 8; }
+    } else {                                   // hit 1: left hook, hit 2: right hook (armP is the character's left arm)
+      var side = f.chain === 1 ? 1 : -1, A = side > 0 ? 'p' : 'n', O = side > 0 ? 'n' : 'p';
+      o[O + 'X'] = -1.9; o[O + 'O'] = -0.4; o.k = 14;
+      if (t < mv.start) { o[A + 'X'] = -1.4; o[A + 'O'] = 1.4; o.ty = 0.6 * side; o.k = 32; }
+      else if (t < mv.start + mv.active) { o[A + 'X'] = -1.5; o[A + 'O'] = -0.8; o.ty = -0.75 * side; o.k = 50; }
+      else { o[A + 'X'] = -1.0; o[A + 'O'] = 0.2; o.ty = -0.25 * side; }
+    }
   } else if (s === 'grab' && mv) {
     if (t < mv.start) { o.pX = o.nX = -1.55; o.pO = o.nO = 0.9; o.tx = 0.15; o.k = 22; }
     else if (t < mv.start + mv.active) { o.pX = o.nX = -1.5; o.pO = o.nO = -0.7; o.tx = 0.3; o.k = 50; }
