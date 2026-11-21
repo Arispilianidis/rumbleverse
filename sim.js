@@ -8,11 +8,10 @@ var TICK = 1 / 60;
 var R_ARENA = 9.4, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8 },
-  heavy: { start: 0.36, active: 0.09, rec: 0.45, dmg: 15, range: 2.0,  stun: 0.6,  kb: 8.5, cost: 16, lunge: 5.0, guard: 26 },
   grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0 }
 };
-var ACTS = ['light', 'heavy', 'grab', 'dodge'];
-var BLANK = Object.freeze({ mx: 0, mz: 0, block: false, light: false, heavy: false, grab: false, dodge: false });
+var ACTS = ['light', 'grab', 'dodge'];
+var BLANK = Object.freeze({ mx: 0, mz: 0, block: false, light: false, grab: false, dodge: false });
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -24,7 +23,7 @@ function q(v) { return Math.round(v * 1e6) / 1e6; }   // trims cross-engine floa
 function quantInput(i) {
   return {
     mx: Math.round(clamp(i.mx || 0, -1, 1) * 64) / 64, mz: Math.round(clamp(i.mz || 0, -1, 1) * 64) / 64,
-    block: !!i.block, light: !!i.light, heavy: !!i.heavy, grab: !!i.grab, dodge: !!i.dodge
+    block: !!i.block, light: !!i.light, grab: !!i.grab, dodge: !!i.dodge
   };
 }
 
@@ -102,13 +101,13 @@ function update(S, f, inp, foe) {
       else if (f.stamina >= MOVES[a].cost) startAttack(f, a);
       else { f.buf = ''; f.bufT = 0; }
     }
-  } else if (s === 'light' || s === 'heavy' || s === 'grab') {
+  } else if (s === 'light' || s === 'grab') {
     var m = MOVES[f.mv];
     if (f.t < m.start) faceFoe(f, foe, 10);
     if (f.t >= m.start && !f.lunged) {
       f.lunged = true;
       f.vx = Math.sin(f.yaw) * m.lunge; f.vz = Math.cos(f.yaw) * m.lunge;
-      ev(S, { k: 'whoosh', heavy: s === 'heavy' });
+      ev(S, { k: 'whoosh', heavy: false });
     }
     k = Math.exp(-7 * dt); f.vx *= k; f.vz *= k;
     if (f.t >= m.start + m.active + m.rec) toIdle(f);
@@ -157,7 +156,7 @@ function resolveCombat(S) {
   for (i = 0; i < 2; i++) snaps[i] = { state: F[i].state, blocking: F[i].blocking, invuln: F[i].invuln };
   for (i = 0; i < 2; i++) {
     A = F[i]; D = F[1 - i];
-    if ((A.state === 'light' || A.state === 'heavy') && activeWindow(A) && reach(A, D, MOVES[A.mv].range)) acts.push([A, D, snaps[1 - i]]);
+    if (A.state === 'light' && activeWindow(A) && reach(A, D, MOVES[A.mv].range)) acts.push([A, D, snaps[1 - i]]);
   }
   for (i = 0; i < acts.length; i++) strike(S, acts[i][0], acts[i][1], acts[i][2]);
   for (i = 0; i < 2; i++) {
@@ -166,7 +165,7 @@ function resolveCombat(S) {
   }
 }
 function strike(S, A, D, snap) {
-  var mv = MOVES[A.mv], heavy = A.state === 'heavy';
+  var mv = MOVES[A.mv];
   var mx = (A.x + D.x) / 2, mz = (A.z + D.z) / 2;
   if (snap.invuln > 0) { A.hitDone = true; ev(S, { k: 'dodge', x: D.x, z: D.z }); return; }
   if (snap.state === 'down' || snap.state === 'thrown' || snap.state === 'ko' || snap.state === 'throwing') return;
@@ -174,10 +173,9 @@ function strike(S, A, D, snap) {
   var dx = D.x - A.x, dz = D.z - A.z, l = len(dx, dz) || 1; dx /= l; dz /= l;
   if (snap.blocking && snap.state === 'idle') {
     D.stamina -= mv.guard; D.stDelay = 1.0; D.flash = 0.1; D.flashCol = 0x2fd8ea;
-    if (heavy) takeDamage(D, 3);
     D.vx += dx * mv.kb * 0.45; D.vz += dz * mv.kb * 0.45; A.vx -= dx * 1.5; A.vz -= dz * 1.5;
     S.hitstop = Math.max(S.hitstop, 0.05);
-    ev(S, { k: 'block', x: D.x, z: D.z, mx: mx, mz: mz, heavy: heavy, sh: 0.12 });
+    ev(S, { k: 'block', x: D.x, z: D.z, mx: mx, mz: mz, heavy: false, sh: 0.12 });
     if (D.stamina <= 0) { D.stamina = 0; toState(D, 'guardbreak', 1.1); ev(S, { k: 'gbreak', x: D.x, z: D.z, sh: 0.3 }); }
     return;
   }
@@ -185,11 +183,11 @@ function strike(S, A, D, snap) {
   var dmg = Math.max(1, Math.round(mv.dmg * Math.max(0.4, 1 - 0.18 * (D.combo - 1))));
   takeDamage(D, dmg);
   A.comboN = D.combo; A.comboT = 1.3;
-  var down = heavy || D.combo >= 4, combo = D.combo;
+  var down = D.combo >= 4, combo = D.combo;
   if (down) { toState(D, 'down', 1.2); } else { toState(D, 'hit', mv.stun * (1 - 0.1 * (combo - 1))); }
   D.combo = combo; D.vx = dx * mv.kb; D.vz = dz * mv.kb;
-  S.hitstop = Math.max(S.hitstop, heavy ? 0.11 : 0.05);
-  ev(S, { k: 'hit', x: D.x, z: D.z, mx: mx, mz: mz, dmg: dmg, heavy: heavy, down: down, d: D.idx, sh: heavy ? 0.4 : 0.15 });
+  S.hitstop = Math.max(S.hitstop, 0.05);
+  ev(S, { k: 'hit', x: D.x, z: D.z, mx: mx, mz: mz, dmg: dmg, heavy: false, down: down, d: D.idx, sh: 0.15 });
 }
 function grab(S, A, D) {
   var s = D.state;
@@ -201,7 +199,7 @@ function grab(S, A, D) {
     ev(S, { k: 'tech', x: (A.x + D.x) / 2, z: (A.z + D.z) / 2 });
     return;
   }
-  if (!(s === 'idle' || s === 'light' || s === 'heavy' || s === 'guardbreak')) return;
+  if (!(s === 'idle' || s === 'light' || s === 'guardbreak')) return;
   A.hitDone = true;
   toState(A, 'throwing', THROW_T + 0.3); A.slammed = false; A.vx = 0; A.vz = 0; A.mv = '';
   toState(D, 'thrown', 0); D.vx = 0; D.vz = 0; D.throwU = 0;

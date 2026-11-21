@@ -187,7 +187,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
 <div id="menu">
   <div class="panel">
     <h1>Rooftop<span>Rumble</span></h1>
-    <p class="tag">Best of three on a rooftop ring. Strikes beat grabs, grabs beat blocks, and a heavy hit breaks a guard.</p>
+    <p class="tag">Best of three on a rooftop ring. Strikes beat grabs, grabs beat blocks, and every blocked strike drains stamina.</p>
     <p class="touch">This game needs a keyboard or a gamepad.</p>
     <div class="modes" id="modes">
       <button class="btn" id="play1" type="button">1 Player<small>You (orange) vs the bot</small></button>
@@ -212,14 +212,13 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
     <div class="keys">
       <span class="h"></span><span class="h a">Player 1</span><span class="h b">Player 2</span>
       <span>Move</span><span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></span><span><kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd></span>
-      <span>Light</span><span><kbd>F</kbd></span><span><kbd>,</kbd></span>
-      <span>Heavy</span><span><kbd>G</kbd></span><span><kbd>.</kbd></span>
+      <span>Attack</span><span><kbd>F</kbd></span><span><kbd>,</kbd></span>
       <span>Grab</span><span><kbd>H</kbd></span><span><kbd>/</kbd></span>
       <span>Block (hold)</span><span><kbd>R</kbd></span><span><kbd>Right Shift</kbd></span>
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
-    <p class="rps"><span><b>Light</b> chains up to four hits. <b>Heavy</b> knocks down and crushes guard.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
-    <p class="fine">Controller: stick or D-pad to move, X light, Y heavy, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
+    <p class="rps"><span><b>Attack</b> chains up to four hits, and the fourth knocks down.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
+    <p class="fine">Controller: stick or D-pad to move, X attack, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
 
@@ -245,7 +244,6 @@ var ROUND_TIME = 60;
 var HIP_Y = 0.82;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8 },
-  heavy: { start: 0.36, active: 0.09, rec: 0.45, dmg: 15, range: 2.0,  stun: 0.6,  kb: 8.5, cost: 16, lunge: 5.0, guard: 26 },
   grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0 }
 };
 var THROW_T = 0.85;
@@ -565,10 +563,6 @@ function poseFighter(v, f, dt, now) {
     if (t < mv.start) { o[A + 'X'] = -0.2; o[A + 'O'] = 0.7; o.ty = 0.5 * side; o.k = 32; }
     else if (t < mv.start + mv.active) { o[A + 'X'] = -1.62; o[A + 'O'] = -0.05; o.ty = -0.55 * side; o.k = 50; }
     else { o[A + 'X'] = -1.0; o[A + 'O'] = 0.1; o.ty = -0.2 * side; }
-  } else if (s === 'heavy' && mv) {
-    if (t < mv.start) { o.pX = o.nX = -3.0; o.pO = o.nO = 0.15; o.tx = -0.4; o.hy = HIP_Y - 0.04; o.k = 10; }
-    else if (t < mv.start + mv.active) { o.pX = o.nX = -1.1; o.pO = o.nO = -0.1; o.tx = 0.75; o.hy = HIP_Y - 0.12; o.k = 50; }
-    else { o.pX = o.nX = -0.9; o.tx = 0.6; o.hy = HIP_Y - 0.1; o.k = 8; }
   } else if (s === 'grab' && mv) {
     if (t < mv.start) { o.pX = o.nX = -1.55; o.pO = o.nO = 0.9; o.tx = 0.15; o.k = 22; }
     else if (t < mv.start + mv.active) { o.pX = o.nX = -1.5; o.pO = o.nO = -0.7; o.tx = 0.3; o.k = 50; }
@@ -608,7 +602,7 @@ function poseFighter(v, f, dt, now) {
 /* ---------- bot (offline only; lives outside the sim so it may use Math.random) ---------- */
 function Bot(level) { this.lv = level; this.think = 0.3; this.blockT = 0; this.strafe = 1; this.strafeT = 0; this.cool = 0.5; }
 Bot.prototype.act = function (dt, me, foe) {
-  var inp = { mx: 0, mz: 0, block: false, light: false, heavy: false, grab: false, dodge: false };
+  var inp = { mx: 0, mz: 0, block: false, light: false, grab: false, dodge: false };
   var dx = foe.x - me.x, dz = foe.z - me.z, d = Math.sqrt(dx * dx + dz * dz) || 1e-3, nx = dx / d, nz = dz / d, lv = this.lv;
   this.think -= dt; this.blockT -= dt; this.strafeT -= dt; this.cool -= dt;
   if (this.strafeT <= 0) { this.strafe = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0.6 + Math.random() * 1.2; }
@@ -616,22 +610,19 @@ Bot.prototype.act = function (dt, me, foe) {
   if (me.state !== 'idle') return inp;
   if (this.think <= 0) {
     this.think = 0.28 - 0.16 * lv + Math.random() * 0.1;
-    var fHeavyWind = foe.state === 'heavy' && foe.t < 0.3, fStrike = foe.state === 'light' || foe.state === 'heavy', fGrab = foe.state === 'grab';
+    var fStrike = foe.state === 'light', fGrab = foe.state === 'grab';
     var fm = MOVES[foe.mv], foeRec = !!fm && foe.t > fm.start + fm.active;
-    if (fHeavyWind && d < 3.2 && Math.random() < 0.3 + 0.6 * lv) {
-      if (me.stamina > 30 && Math.random() < 0.55) { inp.dodge = true; inp.mx = -nx; inp.mz = -nz; this.cool = 0.4; }
-      else { this.blockT = 0.5; inp.block = true; }
-    } else if (fGrab && d < 2.2 && Math.random() < 0.3 + 0.5 * lv) { inp.light = true; this.cool = 0.4; }
-    else if (fStrike && d < 2.4 && Math.random() < 0.15 + 0.3 * lv) { this.blockT = 0.4; inp.block = true; }
-    else if (foeRec && d < 2.1 && Math.random() < 0.3 + 0.6 * lv) { if (Math.random() < 0.5) inp.heavy = true; else inp.light = true; this.cool = 0.5; }
+    if (fGrab && d < 2.2 && Math.random() < 0.3 + 0.5 * lv) { inp.light = true; this.cool = 0.4; }
+    else if (fStrike && d < 2.4 && Math.random() < 0.15 + 0.3 * lv) { if (me.stamina > 30 && Math.random() < 0.3) { inp.dodge = true; inp.mx = -nx; inp.mz = -nz; this.cool = 0.4; } else { this.blockT = 0.4; inp.block = true; } }
+    else if (foeRec && d < 2.1 && Math.random() < 0.3 + 0.6 * lv) { inp.light = true; this.cool = 0.5; }
     else if (foe.blocking && d < 2.0 && Math.random() < 0.35 + 0.5 * lv) { inp.grab = true; this.cool = 0.7; }
     else if (d < 1.95 && this.cool <= 0) {
       var r = Math.random();
-      if (r < 0.45) inp.light = true; else if (r < 0.65) inp.heavy = true; else if (r < 0.83) inp.grab = true;
+      if (r < 0.6) inp.light = true; else if (r < 0.8) inp.grab = true;
       this.cool = (0.35 + Math.random() * 0.5) * (1.5 - lv);
     }
   }
-  if (!inp.dodge && !inp.block && !(inp.light || inp.heavy || inp.grab)) {
+  if (!inp.dodge && !inp.block && !(inp.light || inp.grab)) {
     if (d > 1.9) { inp.mx = nx * 0.95 - nz * this.strafe * 0.3; inp.mz = nz * 0.95 + nx * this.strafe * 0.3; }
     else if (d < 1.25) { inp.mx = -nx * 0.6; inp.mz = -nz * 0.6; }
     else { inp.mx = -nz * this.strafe * 0.35; inp.mz = nx * this.strafe * 0.35; }
@@ -642,8 +633,8 @@ Bot.prototype.act = function (dt, me, foe) {
 /* ---------- input ---------- */
 var held = {}, pressed = {};
 var KEYMAP = [
-  { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS', light: 'KeyF', heavy: 'KeyG', grab: 'KeyH', block: 'KeyR', dodge: 'Space' },
-  { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown', light: 'Comma', heavy: 'Period', grab: 'Slash', block: 'ShiftRight', dodge: 'Enter' }
+  { l: 'KeyA', r: 'KeyD', u: 'KeyW', d: 'KeyS', light: 'KeyF', grab: 'KeyH', block: 'KeyR', dodge: 'Space' },
+  { l: 'ArrowLeft', r: 'ArrowRight', u: 'ArrowUp', d: 'ArrowDown', light: 'Comma', grab: 'Slash', block: 'ShiftRight', dodge: 'Enter' }
 ];
 var GAMEKEYS = {};
 KEYMAP.forEach(function (m) { Object.keys(m).forEach(function (k) { GAMEKEYS[m[k]] = 1; }); });
@@ -657,14 +648,14 @@ function btn(gp, n) { return !!(gp.buttons[n] && gp.buttons[n].pressed); }
 function sampleHuman(i, cyaw) {
   var m = KEYMAP[i];
   var x = (held[m.r] ? 1 : 0) - (held[m.l] ? 1 : 0), y = (held[m.u] ? 1 : 0) - (held[m.d] ? 1 : 0);
-  var inp = { block: !!held[m.block], light: !!pressed[m.light], heavy: !!pressed[m.heavy], grab: !!pressed[m.grab], dodge: !!pressed[m.dodge] };
+  var inp = { block: !!held[m.block], light: !!pressed[m.light], grab: !!pressed[m.grab], dodge: !!pressed[m.dodge] };
   var gp = pads()[i];
   if (gp) {
     var ax = gp.axes[0] || 0, ay = -(gp.axes[1] || 0);
     if (Math.hypot(ax, ay) > 0.25) { x += ax; y += ay; }
     if (btn(gp, 14)) x -= 1; if (btn(gp, 15)) x += 1; if (btn(gp, 13)) y -= 1; if (btn(gp, 12)) y += 1;
     var now = [btn(gp, 2), btn(gp, 3), btn(gp, 1), btn(gp, 0)], prev = padPrev[i] || [false, false, false, false];
-    if (now[0] && !prev[0]) inp.light = true; if (now[1] && !prev[1]) inp.heavy = true;
+    if (now[0] && !prev[0]) inp.light = true;
     if (now[2] && !prev[2]) inp.grab = true; if (now[3] && !prev[3]) inp.dodge = true;
     padPrev[i] = now;
     if (btn(gp, 4) || btn(gp, 5) || btn(gp, 6) || btn(gp, 7)) inp.block = true;
@@ -718,8 +709,8 @@ function startMatch(mode) {
   menuEl.hidden = true; hudEl.hidden = false;
   var n = names(); $('n0').textContent = n[0]; $('n1').textContent = n[1];
   $('hint').innerHTML = mode === 'one'
-    ? '<div><b>WASD</b> move · <b>F</b> light · <b>G</b> heavy · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div></div>'
-    : '<div><b>WASD</b> move · <b>F</b> light · <b>G</b> heavy · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div><b>Arrows</b> move · <b>,</b> light · <b>.</b> heavy · <b>/</b> grab · <b>R-Shift</b> block · <b>Enter</b> dodge</div>';
+    ? '<div><b>WASD</b> move · <b>F</b> attack · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div></div>'
+    : '<div><b>WASD</b> move · <b>F</b> attack · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div><b>Arrows</b> move · <b>,</b> attack · <b>/</b> grab · <b>R-Shift</b> block · <b>Enter</b> dodge</div>';
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   held = {}; pressed = {}; pend[0] = newPend(); pend[1] = newPend();
   freshMatch();
@@ -763,16 +754,16 @@ function resize() {
 }
 window.addEventListener('resize', resize); resize();
 
-function newPend() { return { mx: 0, mz: 0, block: false, light: false, heavy: false, grab: false, dodge: false }; }
+function newPend() { return { mx: 0, mz: 0, block: false, light: false, grab: false, dodge: false }; }
 var pend = [newPend(), newPend()], acc = 0, last = performance.now();
 function collectInputs() {
   var live = S.phase === 'fight';
   for (var i = 0; i < 2; i++) {
     var p = pend[i], human = G.mode === 'online' ? i === G.localIdx : !bots[i];
-    if (!live || !human) { p.light = p.heavy = p.grab = p.dodge = false; continue; }
+    if (!live || !human) { p.light = p.grab = p.dodge = false; continue; }
     var s = sampleHuman(G.mode === 'online' ? 0 : i, cam.yaw);
     p.mx = s.mx; p.mz = s.mz; p.block = s.block;
-    p.light = p.light || s.light; p.heavy = p.heavy || s.heavy; p.grab = p.grab || s.grab; p.dodge = p.dodge || s.dodge;
+    p.light = p.light || s.light; p.grab = p.grab || s.grab; p.dodge = p.dodge || s.dodge;
   }
 }
 function tickOnce() {
@@ -780,7 +771,7 @@ function tickOnce() {
   if (S.phase === 'fight') {
     for (var i = 0; i < 2; i++) {
       ins[i] = bots[i] ? Sim.quantInput(bots[i].act(TICK, S.f[i], S.f[1 - i])) : Sim.quantInput(pend[i]);
-      pend[i].light = pend[i].heavy = pend[i].grab = pend[i].dodge = false;
+      pend[i].light = pend[i].grab = pend[i].dodge = false;
     }
   }
   Sim.step(S, ins[0], ins[1]);
@@ -790,7 +781,7 @@ function tickOnce() {
 function tickOnline() {
   var p = pend[G.localIdx];
   if (!G.net.advance(p)) return false;
-  p.light = p.heavy = p.grab = p.dodge = false;
+  p.light = p.grab = p.dodge = false;
   S = G.net.state();
   return true;
 }
@@ -919,7 +910,7 @@ function startOnline(role, link) {
   }, 1000);
   menuEl.hidden = true; hudEl.hidden = false;
   var n = names(); $('n0').textContent = n[0]; $('n1').textContent = n[1];
-  $('hint').innerHTML = '<div><b>WASD</b> move · <b>F</b> light · <b>G</b> heavy · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div></div>';
+  $('hint').innerHTML = '<div><b>WASD</b> move · <b>F</b> attack · <b>H</b> grab · <b>R</b> block · <b>Space</b> dodge</div><div></div>';
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   held = {}; pressed = {};
   newOnlineMatch();
