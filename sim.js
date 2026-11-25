@@ -5,7 +5,7 @@
 'use strict';
 
 var TICK = 1 / 60;
-var R_ARENA = 9.4, ROUND_TIME = 60, THROW_T = 0.85;
+var R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8 },
   light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8 },
@@ -34,7 +34,7 @@ function newFighter(idx) {
   return {
     idx: idx, x: x, y: 0, z: 0, vx: 0, vz: 0, yaw: x < 0 ? Math.PI / 2 : -Math.PI / 2,
     hp: 100, stamina: 100, stDelay: 0, state: 'idle', t: 0, dur: 0, mv: '', hitDone: false, lunged: false,
-    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false,
+    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false,
     flash: 0, flashCol: 0, ropeUsed: false, slammed: false, throwU: 0, win: false, ghostT: 0
   };
 }
@@ -53,9 +53,16 @@ function newMatch() {
 }
 
 /* ---------- fighter helpers ---------- */
+var HAZARDS = [{ x: 9.5, z: 0, r: 1.9 }, { x: -9.5, z: 0, r: 1.9 }, { x: 0, z: 9.5, r: 1.9 }, { x: 0, z: -9.5, r: 1.9 }];
+function inHazard(f) { for (var i = 0; i < HAZARDS.length; i++) if (len(f.x - HAZARDS[i].x, f.z - HAZARDS[i].z) < HAZARDS[i].r) return true; return false; }
+function hazardHit(S, f) {
+  if (f.hazUsed || !inHazard(f)) return;
+  f.hazUsed = true; takeDamage(f, HAZ_DMG);
+  ev(S, { k: 'hazard', x: f.x, z: f.z, dmg: HAZ_DMG, d: f.idx, sh: 0.45 });
+}
 function takeDamage(f, n) { f.hp = Math.max(0, f.hp - n); f.ghostT = 0.55; f.flash = 0.12; f.flashCol = 0xffffff; }
 function toState(f, s, dur) { f.state = s; f.t = 0; f.dur = dur || 0; f.blocking = false; f.buf = ''; f.bufT = 0; f.ropeUsed = false; f.hitDone = false; f.chainWin = 0; }
-function toIdle(f) { f.state = 'idle'; f.t = 0; f.combo = 0; f.mv = ''; }
+function toIdle(f) { f.hazUsed = false; f.state = 'idle'; f.t = 0; f.combo = 0; f.mv = ''; }
 function faceFoe(f, foe, rate) {
   var target = Math.atan2(foe.x - f.x, foe.z - f.z);
   f.yaw = q(f.yaw + clamp(angDiff(f.yaw, target), -rate * TICK, rate * TICK));
@@ -144,10 +151,11 @@ function update(S, f, inp, foe) {
     } else if (!f.slammed) {
       f.slammed = true;
       var r = len(D.x, D.z); if (r > R_ARENA) { D.x *= R_ARENA / r; D.z *= R_ARENA / r; }
-      D.y = 0; takeDamage(D, 14); toState(D, 'down', 1.3); D.vx = 0; D.vz = 0;
+      D.y = 0; D.hazUsed = false; takeDamage(D, 14); toState(D, 'down', 1.3); D.vx = 0; D.vz = 0;
       S.hitstop = Math.max(S.hitstop, 0.14);
       f.comboN = 1; f.comboT = 0;
       ev(S, { k: 'slam', x: D.x, z: D.z, dmg: 14, d: D.idx, sh: 0.55 });
+      hazardHit(S, D);
     }
     if (f.t >= THROW_T + 0.3) toIdle(f);
   }
@@ -219,6 +227,7 @@ function grab(S, A, D) {
 function integrate(S, f) {
   if (f.state === 'thrown') return;
   f.x = q(f.x + f.vx * TICK); f.z = q(f.z + f.vz * TICK); f.vx = q(f.vx); f.vz = q(f.vz);
+  if ((f.state === 'hit' || f.state === 'down' || f.state === 'guardbreak') && len(f.vx, f.vz) > 2.5) hazardHit(S, f);   // only when knocked in
   var r = len(f.x, f.z);
   if (r > R_ARENA) {
     var nx = f.x / r, nz = f.z / r;
@@ -307,6 +316,6 @@ function hash(S) {
   return h >>> 0;
 }
 
-var API = { TICK: TICK, MOVES: MOVES, THROW_T: THROW_T, R_ARENA: R_ARENA, ROUND_TIME: ROUND_TIME, BLANK: BLANK, newMatch: newMatch, step: step, clone: clone, hash: hash, quantInput: quantInput };
+var API = { TICK: TICK, MOVES: MOVES, THROW_T: THROW_T, R_ARENA: R_ARENA, HAZARDS: HAZARDS, ROUND_TIME: ROUND_TIME, BLANK: BLANK, newMatch: newMatch, step: step, clone: clone, hash: hash, quantInput: quantInput };
 if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.RRSim = API;
 })(typeof window !== 'undefined' ? window : this);

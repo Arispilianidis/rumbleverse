@@ -217,7 +217,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <span>Block (hold)</span><span><kbd>R</kbd></span><span><kbd>Right Shift</kbd></span>
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
-    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Attack</b> then <b>Grab</b>: hook into a kick that sends them flying; into the ropes means a stun.</span><span><b>Attack, Attack, Grab</b>: two hooks then the throw over your head.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
+    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Attack</b> then <b>Grab</b>: hook into a kick that sends them flying; into the ropes means a stun.</span><span><b>Attack, Attack, Grab</b>: two hooks then the throw over your head.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage, or into a red spike pit for 30.</span></p>
     <p class="fine">Controller: stick or D-pad to move, X attack, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
@@ -239,7 +239,7 @@ var smooth = function (u) { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
 var V3 = THREE.Vector3;
 
 /* ---------- tuning ---------- */
-var R_ARENA = 9.4;           // fighters are clamped inside this radius; the ropes sit just outside
+var R_ARENA = 14.1;           // fighters are clamped inside this radius; the ropes sit just outside
 var ROUND_TIME = 60;
 var HIP_Y = 0.82;
 var MOVES = {
@@ -260,8 +260,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 var scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x5a2b5c, 48, 150);
-var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 240);
+scene.fog = new THREE.Fog(0x5a2b5c, 62, 190);
+var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
 
 var sky = new THREE.Mesh(
   new THREE.SphereGeometry(170, 24, 16),
@@ -296,7 +296,7 @@ var sun = new THREE.DirectionalLight(0xffe6d0, 0.95);
 sun.position.set(6, 18, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
-sun.shadow.camera.left = -14; sun.shadow.camera.right = 14; sun.shadow.camera.top = 14; sun.shadow.camera.bottom = -14;
+sun.shadow.camera.left = -22; sun.shadow.camera.right = 22; sun.shadow.camera.top = 22; sun.shadow.camera.bottom = -22;
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 50;
 sun.shadow.bias = -0.0006;
 scene.add(sun);
@@ -304,6 +304,7 @@ var rimA = new THREE.PointLight(0xff8a3d, 0.7, 34); rimA.position.set(-9, 4, 5);
 var rimB = new THREE.PointLight(0x2fd8ea, 0.7, 34); rimB.position.set(9, 4, 5); scene.add(rimB);
 
 /* arena floor texture */
+var AG = new THREE.Group(); AG.scale.set(1.5, 1, 1.5); scene.add(AG);
 (function arena() {
   var S = 1024, c = document.createElement('canvas'); c.width = c.height = S;
   var x = c.getContext('2d');
@@ -319,33 +320,52 @@ var rimB = new THREE.PointLight(0x2fd8ea, 0.7, 34); rimB.position.set(9, 4, 5); 
   spot(-4, '#ff8a3d'); spot(4, '#2fd8ea');
   var tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
   var floor = new THREE.Mesh(new THREE.CircleGeometry(10.5, 72), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; AG.add(floor);
 
   var skirt = new THREE.Mesh(new THREE.CylinderGeometry(10.9, 10.9, 1.2, 72), new THREE.MeshStandardMaterial({ color: 0x2b2152, roughness: 0.7 }));
-  skirt.position.y = -0.62; skirt.receiveShadow = true; scene.add(skirt);
+  skirt.position.y = -0.62; skirt.receiveShadow = true; AG.add(skirt);
   var deck = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 1, 72), new THREE.MeshStandardMaterial({ color: 0x1d1640, roughness: 0.95 }));
-  deck.position.y = -1.7; deck.receiveShadow = true; scene.add(deck);
+  deck.position.y = -1.7; deck.receiveShadow = true; AG.add(deck);
 
   var ropeCols = [0xff3d6e, 0xfff2dd, 0xff3d6e];
   for (var i = 0; i < 3; i++) {
     var rope = new THREE.Mesh(new THREE.TorusGeometry(10.5, 0.06, 8, 96), new THREE.MeshStandardMaterial({ color: ropeCols[i], emissive: ropeCols[i], emissiveIntensity: 0.45, roughness: 0.5 }));
-    rope.rotation.x = Math.PI / 2; rope.position.y = 0.75 + i * 0.6; scene.add(rope);
+    rope.rotation.x = Math.PI / 2; rope.position.y = 0.75 + i * 0.6; AG.add(rope);
   }
   var postM = new THREE.MeshStandardMaterial({ color: 0x3a2e73, roughness: 0.6 });
   var capM = new THREE.MeshBasicMaterial({ color: 0xffd23f });
   for (var k = 0; k < 8; k++) {
     var a = k / 8 * Math.PI * 2 + Math.PI / 8;
     var post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 2.3, 10), postM);
-    post.position.set(Math.cos(a) * 10.5, 1.1, Math.sin(a) * 10.5); post.castShadow = true; scene.add(post);
+    post.position.set(Math.cos(a) * 10.5, 1.1, Math.sin(a) * 10.5); post.castShadow = true; AG.add(post);
     var cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), capM);
-    cap.position.set(post.position.x, 2.35, post.position.z); scene.add(cap);
+    cap.position.set(post.position.x, 2.35, post.position.z); AG.add(cap);
   }
   var bulbM = new THREE.MeshBasicMaterial({ color: 0xffe08a });
   for (var b = 0; b < 16; b++) {
     var ab = b / 16 * Math.PI * 2;
     var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), bulbM);
-    bulb.position.set(Math.cos(ab) * 14.6, -0.9 + 0.5, Math.sin(ab) * 14.6); scene.add(bulb);
+    bulb.position.set(Math.cos(ab) * 14.6, -0.9 + 0.5, Math.sin(ab) * 14.6); AG.add(bulb);
   }
+})();
+
+/* hazards: fighters knocked into these take 30 */
+var hazMats = [];
+(function hazards() {
+  window.RRSim.HAZARDS.forEach(function (H) {
+    var g = new THREE.Group(); g.position.set(H.x, 0.03, H.z);
+    var disc = new THREE.Mesh(new THREE.CircleGeometry(H.r, 40), new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.45, depthWrite: false }));
+    disc.rotation.x = -Math.PI / 2; g.add(disc); hazMats.push(disc.material);
+    var ringM = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+    var rg = new THREE.Mesh(new THREE.RingGeometry(H.r - 0.12, H.r, 48), ringM); rg.rotation.x = -Math.PI / 2; rg.position.y = 0.01; g.add(rg);
+    var spikeM = new THREE.MeshStandardMaterial({ color: 0xcfd3e6, emissive: 0xff3a1a, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.4 });
+    for (var k = 0; k < 14; k++) {
+      var a = k / 14 * Math.PI * 2, rr = k % 2 ? H.r * 0.42 : H.r * 0.72;
+      var sp = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.55, 8), spikeM); sp.position.set(Math.cos(a) * rr, 0.27, Math.sin(a) * rr); sp.castShadow = true; g.add(sp);
+    }
+    var light = new THREE.PointLight(0xff3a1a, 0.8, 7); light.position.y = 1.2; g.add(light);
+    scene.add(g);
+  });
 })();
 
 /* skyline */
@@ -361,7 +381,7 @@ var rimB = new THREE.PointLight(0x2fd8ea, 0.7, 34); rimB.position.set(9, 4, 5); 
   }
   var base = [winTex(64, 128), winTex(64, 128), winTex(64, 128), winTex(64, 128)];
   for (var i = 0; i < 70; i++) {
-    var ang = Math.random() * Math.PI * 2, r = 34 + Math.random() * 70;
+    var ang = Math.random() * Math.PI * 2, r = 48 + Math.random() * 80;
     var w = 6 + Math.random() * 10, d = 6 + Math.random() * 10, top = -10 + Math.random() * 34, bot = -90, h = top - bot;
     var t = base[i % 4].clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(2, Math.round(h / 6)));
     var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ map: t, color: 0xb9a4d8 }));
@@ -539,6 +559,7 @@ function playEvents(list) {
       case 'dodge': popup('DODGE!', e, 'blk'); break;
       case 'tech': popup('TECH!', e, 'blk'); sfx.block(); burst(v3(e.x, 1.3, e.z), 8, 0xffffff, 5, 2); break;
       case 'grab': popup('GRABBED!', e, 'big'); sfx.hit(false); break;
+      case 'hazard': burst(v3(e.x, 0.5, e.z), 22, 0xff4a1a, 8, 5); wave(v3(e.x, 0, e.z), 0xff3a1a, 16); sfx.slam(); popup('HAZARD! 30', e, 'big'); break;
       case 'slam': burst(v3(e.x, 0.3, e.z), 18, 0xd9d0f5, 7, 4); wave(v3(e.x, 0, e.z), 0xffffff, 14); sfx.slam(); popup('14', e, 'big'); break;
       case 'rope': burst(v3(e.x, 1.2, e.z), 8, 0xff3d6e, 5, 3); sfx.hit(false); popup(e.stun ? 'ROPE STUN! 3' : 'ROPES! 3', e, 'big'); break;
     }
@@ -746,7 +767,7 @@ function updateCamera(dt) {
   var right = new V3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
   var aspect = camera.aspect, tanH = Math.tan(22.5 * Math.PI / 180) * aspect;
   var ext = Math.abs((b.x - a.x) * right.x + (b.z - a.z) * right.z) + 7.5;
-  var D = clamp(ext / (2 * tanH), 11, 30);
+  var D = clamp(ext / (2 * tanH), 11, 44);
   cam.D = damp(cam.D, D, 4, dt);
   var tl = new V3((a.x + b.x) / 2, 1.1, (a.z + b.z) / 2);
   if (G.attract && aspect > 1.3) tl.addScaledVector(right, -cam.D * 0.22);
@@ -821,6 +842,7 @@ function frame(nowMs) {
     netInfoAt = now; var st = G.net.stats;
     $('netinfo').textContent = 'ping ' + (G.rtt == null ? '–' : G.rtt) + ' ms · rollbacks ' + st.rollbacks + ' · waiting ' + Math.max(0, G.net.lag() - 3);
   }
+  var hp_ = 0.35 + 0.2 * Math.sin(performance.now() / 220); for (var hi = 0; hi < hazMats.length; hi++) hazMats[hi].opacity = hp_;
   renderer.render(scene, camera);
   for (var k in pressed) pressed[k] = false;
   requestAnimationFrame(frame);
