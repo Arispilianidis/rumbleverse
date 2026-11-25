@@ -7,10 +7,10 @@
 var TICK = 1 / 60;
 var R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
-  light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8 },
-  light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8 },
-  kick: { start: 0.14, active: 0.08, rec: 0.30, dmg: 6, range: 1.85, stun: 0.5, kb: 14, cost: 5, lunge: 3.5, guard: 10 },
-  grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0 }
+  light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8, rHit: 0.03, rBlock: 0.08, rWhiff: 0.10 },
+  light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8, rHit: 0.04, rBlock: 0.12, rWhiff: 0.18 },
+  kick: { start: 0.14, active: 0.08, rec: 0.30, dmg: 6, range: 1.85, stun: 0.5, kb: 14, cost: 5, lunge: 3.5, guard: 10, rHit: 0.04, rBlock: 0.10, rWhiff: 0.16 },
+  grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0, rHit: 0, rBlock: 0, rWhiff: 0.22 }
 };
 var ACTS = ['light', 'grab', 'dodge'];
 var BLANK = Object.freeze({ mx: 0, mz: 0, block: false, light: false, grab: false, dodge: false });
@@ -34,7 +34,7 @@ function newFighter(idx) {
   return {
     idx: idx, x: x, y: 0, z: 0, vx: 0, vz: 0, yaw: x < 0 ? Math.PI / 2 : -Math.PI / 2,
     hp: 100, stamina: 100, stDelay: 0, state: 'idle', t: 0, dur: 0, mv: '', hitDone: false, lunged: false,
-    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false,
+    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false, res: '',
     flash: 0, flashCol: 0, ropeUsed: false, slammed: false, throwU: 0, win: false, ghostT: 0
   };
 }
@@ -80,7 +80,7 @@ function startAttack(f, name) {
     if (f.chain === 3) key = 'light3';
   }
   var mv = MOVES[key];
-  f.state = name; f.t = 0; f.mv = key; f.hitDone = false; f.landed = false; f.cgrab = cg; f.lunged = false; f.buf = ''; f.bufT = 0; f.blocking = false;
+  f.state = name; f.t = 0; f.mv = key; f.hitDone = false; f.landed = false; f.cgrab = cg; f.res = ''; f.lunged = false; f.buf = ''; f.bufT = 0; f.blocking = false;
   f.stamina = Math.max(0, f.stamina - mv.cost); f.stDelay = 0.7;
 }
 function startDodge(S, f, inp, foe) {
@@ -127,7 +127,8 @@ function update(S, f, inp, foe) {
       ev(S, { k: 'whoosh', heavy: s === 'light' && f.chain === 3 });
     }
     k = Math.exp(-7 * dt); f.vx *= k; f.vz *= k;
-    if (f.t >= m.start + m.active + m.rec) { if (s === 'light' && f.landed && f.chain < 3) f.chainWin = 0.4; toIdle(f); }
+    if (f.t >= m.start + m.active && !f.res) f.res = f.hitDone ? 'hit' : 'whiff';   // active frames over with no contact = whiff
+    if (f.t >= m.start + m.active + m.rec + (f.res === 'block' ? m.rBlock : f.res === 'hit' ? m.rHit : m.rWhiff)) { if (s === 'light' && f.landed && f.chain < 3) f.chainWin = 0.4; toIdle(f); }
   } else if (s === 'dodge') {
     k = Math.exp(-5 * dt); f.vx *= k; f.vz *= k;
     faceFoe(f, foe, 6);
@@ -185,19 +186,19 @@ function resolveCombat(S) {
 function strike(S, A, D, snap) {
   var mv = MOVES[A.mv];
   var mx = (A.x + D.x) / 2, mz = (A.z + D.z) / 2;
-  if (snap.invuln > 0) { A.hitDone = true; ev(S, { k: 'dodge', x: D.x, z: D.z }); return; }
+  if (snap.invuln > 0) { A.hitDone = true; A.res = 'whiff'; ev(S, { k: 'dodge', x: D.x, z: D.z }); return; }
   if (snap.state === 'down' || snap.state === 'thrown' || snap.state === 'ko' || snap.state === 'throwing') return;
   A.hitDone = true;
   var dx = D.x - A.x, dz = D.z - A.z, l = len(dx, dz) || 1; dx /= l; dz /= l;
   if (snap.blocking && snap.state === 'idle') {
-    D.stamina -= mv.guard; D.stDelay = 1.0; D.flash = 0.1; D.flashCol = 0x2fd8ea;
+    A.res = 'block'; D.stamina -= mv.guard; D.stDelay = 1.0; D.flash = 0.1; D.flashCol = 0x2fd8ea;
     D.vx += dx * mv.kb * 0.45; D.vz += dz * mv.kb * 0.45; A.vx -= dx * 1.5; A.vz -= dz * 1.5;
     S.hitstop = Math.max(S.hitstop, 0.05);
     ev(S, { k: 'block', x: D.x, z: D.z, mx: mx, mz: mz, heavy: false, sh: 0.12 });
     if (D.stamina <= 0) { D.stamina = 0; toState(D, 'guardbreak', 1.1); ev(S, { k: 'gbreak', x: D.x, z: D.z, sh: 0.3 }); }
     return;
   }
-  D.combo++; A.landed = true;
+  D.combo++; A.landed = true; A.res = 'hit';
   var dmg = Math.max(1, Math.round(mv.dmg * Math.max(0.4, 1 - 0.18 * (D.combo - 1))));
   takeDamage(D, dmg);
   A.comboN = D.combo; A.comboT = 1.3;
