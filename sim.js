@@ -34,7 +34,7 @@ function newFighter(idx) {
   return {
     idx: idx, x: x, y: 0, z: 0, vx: 0, vz: 0, yaw: x < 0 ? Math.PI / 2 : -Math.PI / 2,
     hp: 100, stamina: 100, stDelay: 0, state: 'idle', t: 0, dur: 0, mv: '', hitDone: false, lunged: false,
-    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false,
+    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false,
     flash: 0, flashCol: 0, ropeUsed: false, slammed: false, throwU: 0, win: false, ghostT: 0
   };
 }
@@ -64,7 +64,7 @@ function pushBuf(f, inp) {
   for (var i = 0; i < ACTS.length; i++) if (inp[ACTS[i]]) { f.buf = ACTS[i]; f.bufT = 0.2; }
 }
 function startAttack(f, name) {
-  var key = name;
+  var key = name, cg = name === 'grab' && f.chainWin > 0 && f.chain === 2;   // hook, hook, grab
   if (name === 'grab' && f.chainWin > 0 && f.chain === 1) { name = 'kick'; key = 'kick'; f.chainWin = 0; }   // hook into kick
   if (name === 'light') {                      // 3-hit chain: hook, hook, finisher; a new chain starts when the window lapses
     f.chain = f.chainWin > 0 ? f.chain + 1 : 1;
@@ -73,7 +73,7 @@ function startAttack(f, name) {
     if (f.chain === 3) key = 'light3';
   }
   var mv = MOVES[key];
-  f.state = name; f.t = 0; f.mv = key; f.hitDone = false; f.landed = false; f.lunged = false; f.buf = ''; f.bufT = 0; f.blocking = false;
+  f.state = name; f.t = 0; f.mv = key; f.hitDone = false; f.landed = false; f.cgrab = cg; f.lunged = false; f.buf = ''; f.bufT = 0; f.blocking = false;
   f.stamina = Math.max(0, f.stamina - mv.cost); f.stDelay = 0.7;
 }
 function startDodge(S, f, inp, foe) {
@@ -209,7 +209,7 @@ function grab(S, A, D) {
     ev(S, { k: 'tech', x: (A.x + D.x) / 2, z: (A.z + D.z) / 2 });
     return;
   }
-  if (!(s === 'idle' || s === 'light' || s === 'kick' || s === 'guardbreak')) return;
+  if (!(s === 'idle' || s === 'light' || s === 'kick' || s === 'guardbreak' || (A.cgrab && s === 'hit'))) return;
   A.hitDone = true;
   toState(A, 'throwing', THROW_T + 0.3); A.slammed = false; A.vx = 0; A.vz = 0; A.mv = '';
   toState(D, 'thrown', 0); D.vx = 0; D.vz = 0; D.throwU = 0;
