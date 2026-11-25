@@ -217,7 +217,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <span>Block (hold)</span><span><kbd>R</kbd></span><span><kbd>Right Shift</kbd></span>
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
-    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
+    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Attack</b> then <b>Grab</b>: hook into a kick that sends them flying; into the ropes means a stun.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
     <p class="fine">Controller: stick or D-pad to move, X attack, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
@@ -540,7 +540,7 @@ function playEvents(list) {
       case 'tech': popup('TECH!', e, 'blk'); sfx.block(); burst(v3(e.x, 1.3, e.z), 8, 0xffffff, 5, 2); break;
       case 'grab': popup('GRABBED!', e, 'big'); sfx.hit(false); break;
       case 'slam': burst(v3(e.x, 0.3, e.z), 18, 0xd9d0f5, 7, 4); wave(v3(e.x, 0, e.z), 0xffffff, 14); sfx.slam(); popup('14', e, 'big'); break;
-      case 'rope': burst(v3(e.x, 1.2, e.z), 8, 0xff3d6e, 5, 3); sfx.hit(false); popup('ROPES! 3', e, 'big'); break;
+      case 'rope': burst(v3(e.x, 1.2, e.z), 8, 0xff3d6e, 5, 3); sfx.hit(false); popup(e.stun ? 'ROPE STUN! 3' : 'ROPES! 3', e, 'big'); break;
     }
   }
 }
@@ -569,6 +569,11 @@ function poseFighter(v, f, dt, now) {
       else if (t < mv.start + mv.active) { o[A + 'X'] = -1.5; o[A + 'O'] = -0.8; o.ty = -0.75 * side; o.k = 50; }
       else { o[A + 'X'] = -1.0; o[A + 'O'] = 0.2; o.ty = -0.25 * side; }
     }
+  } else if (s === 'kick' && mv) {             // front kick with the right leg (legN), guard up
+    o.pX = o.nX = -1.9; o.pO = o.nO = -0.4; o.kl = 40; o.k = 30;
+    if (t < mv.start) { o.ln = 0.6; o.lp = -0.1; o.tx = 0.25; o.hy = HIP_Y - 0.06; }
+    else if (t < mv.start + mv.active) { o.ln = -1.55; o.lp = 0.1; o.tx = -0.35; o.hy = HIP_Y - 0.04; }
+    else { o.ln = -0.5; o.lp = 0.1; o.tx = -0.1; o.kl = 14; }
   } else if (s === 'grab' && mv) {
     if (t < mv.start) { o.pX = o.nX = -1.55; o.pO = o.nO = 0.9; o.tx = 0.15; o.k = 22; }
     else if (t < mv.start + mv.active) { o.pX = o.nX = -1.5; o.pO = o.nO = -0.7; o.tx = 0.3; o.k = 50; }
@@ -596,7 +601,7 @@ function poseFighter(v, f, dt, now) {
   ap(j.torso, 'x', o.tx, o.k, dt); ap(j.torso, 'y', o.ty, o.k, dt); ap(j.head, 'x', o.hx, o.k, dt);
   ap(j.armP, 'x', o.pX, o.k, dt); ap(j.armP, 'z', o.pO, o.k, dt);
   ap(j.armN, 'x', o.nX, o.k, dt); ap(j.armN, 'z', -o.nO, o.k, dt);
-  ap(j.legP, 'x', o.lp, 18, dt); ap(j.legN, 'x', o.ln, 18, dt);
+  ap(j.legP, 'x', o.lp, o.kl || 18, dt); ap(j.legN, 'x', o.ln, o.kl || 18, dt);
   j.root.position.set(f.x, f.y, f.z); j.root.rotation.y = f.yaw;
   var em = f.flash > 0 ? f.flashCol : 0x000000;
   for (var i = 0; i < j.mats.length; i++) { j.mats[i].emissive.setHex(em); j.mats[i].emissiveIntensity = f.flash > 0 ? 0.7 : 1; }
@@ -616,7 +621,7 @@ Bot.prototype.act = function (dt, me, foe) {
   if (me.state !== 'idle') return inp;
   if (this.think <= 0) {
     this.think = 0.28 - 0.16 * lv + Math.random() * 0.1;
-    var fStrike = foe.state === 'light', fGrab = foe.state === 'grab';
+    var fStrike = foe.state === 'light' || foe.state === 'kick', fGrab = foe.state === 'grab';
     var fm = MOVES[foe.mv], foeRec = !!fm && foe.t > fm.start + fm.active;
     if (fGrab && d < 2.2 && Math.random() < 0.3 + 0.5 * lv) { inp.light = true; this.cool = 0.4; }
     else if (fStrike && d < 2.4 && Math.random() < 0.15 + 0.3 * lv) { if (me.stamina > 30 && Math.random() < 0.3) { inp.dodge = true; inp.mx = -nx; inp.mz = -nz; this.cool = 0.4; } else { this.blockT = 0.4; inp.block = true; } }

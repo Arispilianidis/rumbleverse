@@ -9,6 +9,7 @@ var R_ARENA = 9.4, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8 },
   light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8 },
+  kick: { start: 0.14, active: 0.08, rec: 0.30, dmg: 6, range: 1.85, stun: 0.5, kb: 14, cost: 5, lunge: 3.5, guard: 10 },
   grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0 }
 };
 var ACTS = ['light', 'grab', 'dodge'];
@@ -64,6 +65,7 @@ function pushBuf(f, inp) {
 }
 function startAttack(f, name) {
   var key = name;
+  if (name === 'grab' && f.chainWin > 0 && f.chain === 1) { name = 'kick'; key = 'kick'; f.chainWin = 0; }   // hook into kick
   if (name === 'light') {                      // 3-hit chain: hook, hook, finisher; a new chain starts when the window lapses
     f.chain = f.chainWin > 0 ? f.chain + 1 : 1;
     if (f.chain > 3) f.chain = 1;
@@ -72,7 +74,7 @@ function startAttack(f, name) {
   }
   var mv = MOVES[key];
   f.state = name; f.t = 0; f.mv = key; f.hitDone = false; f.landed = false; f.lunged = false; f.buf = ''; f.bufT = 0; f.blocking = false;
-  f.stamina -= mv.cost; f.stDelay = 0.7;
+  f.stamina = Math.max(0, f.stamina - mv.cost); f.stDelay = 0.7;
 }
 function startDodge(S, f, inp, foe) {
   var dx = inp.mx, dz = inp.mz;
@@ -109,7 +111,7 @@ function update(S, f, inp, foe) {
       else if (f.stamina >= MOVES[a].cost) startAttack(f, a);
       else { f.buf = ''; f.bufT = 0; }
     }
-  } else if (s === 'light' || s === 'grab') {
+  } else if (s === 'light' || s === 'kick' || s === 'grab') {
     var m = MOVES[f.mv];
     if (f.t < m.start) faceFoe(f, foe, 10);
     if (f.t >= m.start && !f.lunged) {
@@ -164,7 +166,7 @@ function resolveCombat(S) {
   for (i = 0; i < 2; i++) snaps[i] = { state: F[i].state, blocking: F[i].blocking, invuln: F[i].invuln };
   for (i = 0; i < 2; i++) {
     A = F[i]; D = F[1 - i];
-    if (A.state === 'light' && activeWindow(A) && reach(A, D, MOVES[A.mv].range)) acts.push([A, D, snaps[1 - i]]);
+    if ((A.state === 'light' || A.state === 'kick') && activeWindow(A) && reach(A, D, MOVES[A.mv].range)) acts.push([A, D, snaps[1 - i]]);
   }
   for (i = 0; i < acts.length; i++) strike(S, acts[i][0], acts[i][1], acts[i][2]);
   for (i = 0; i < 2; i++) {
@@ -191,11 +193,11 @@ function strike(S, A, D, snap) {
   var dmg = Math.max(1, Math.round(mv.dmg * Math.max(0.4, 1 - 0.18 * (D.combo - 1))));
   takeDamage(D, dmg);
   A.comboN = D.combo; A.comboT = 1.3;
-  var fin = A.chain >= 3, down = fin, combo = D.combo;
-  if (down) { toState(D, 'down', 1.2); } else { toState(D, 'hit', Math.max(mv.stun * (1 - 0.1 * (combo - 1)), A.chain === 2 ? 0.6 : 0)); }
+  var kick = A.state === 'kick', fin = A.state === 'light' && A.chain >= 3, down = fin, combo = D.combo, rem = D.state === 'hit' ? Math.max(0, D.dur - D.t) : 0;
+  if (down) { toState(D, 'down', 1.2); } else { toState(D, 'hit', Math.max(mv.stun * (1 - 0.1 * (combo - 1)), A.state === 'light' && A.chain === 2 ? 0.6 : 0, rem)); }
   D.combo = combo; D.vx = dx * mv.kb; D.vz = dz * mv.kb;
-  S.hitstop = Math.max(S.hitstop, fin ? 0.11 : 0.05);
-  ev(S, { k: 'hit', x: D.x, z: D.z, mx: mx, mz: mz, dmg: dmg, heavy: fin, down: down, d: D.idx, sh: fin ? 0.4 : 0.15 });
+  S.hitstop = Math.max(S.hitstop, fin ? 0.11 : (kick ? 0.08 : 0.05));
+  ev(S, { k: 'hit', x: D.x, z: D.z, mx: mx, mz: mz, dmg: dmg, heavy: fin || kick, down: down, d: D.idx, sh: fin ? 0.4 : (kick ? 0.28 : 0.15) });
 }
 function grab(S, A, D) {
   var s = D.state;
@@ -207,7 +209,7 @@ function grab(S, A, D) {
     ev(S, { k: 'tech', x: (A.x + D.x) / 2, z: (A.z + D.z) / 2 });
     return;
   }
-  if (!(s === 'idle' || s === 'light' || s === 'guardbreak')) return;
+  if (!(s === 'idle' || s === 'light' || s === 'kick' || s === 'guardbreak')) return;
   A.hitDone = true;
   toState(A, 'throwing', THROW_T + 0.3); A.slammed = false; A.vx = 0; A.vz = 0; A.mv = '';
   toState(D, 'thrown', 0); D.vx = 0; D.vz = 0; D.throwU = 0;
@@ -226,8 +228,9 @@ function integrate(S, f) {
       var flying = f.state === 'hit' || f.state === 'down' || f.state === 'guardbreak';
       if (flying && vr > 4.5 && !f.ropeUsed) {
         f.ropeUsed = true; f.vx -= nx * vr * 1.6; f.vz -= nz * vr * 1.6; takeDamage(f, 3);
+        var stunned = f.state === 'hit'; if (stunned) { f.t = 0; f.dur = 1.2; }
         S.hitstop = Math.max(S.hitstop, 0.06);
-        ev(S, { k: 'rope', x: f.x, z: f.z, dmg: 3, sh: 0.3 });
+        ev(S, { k: 'rope', x: f.x, z: f.z, dmg: 3, stun: stunned, sh: 0.3 });
       } else { f.vx -= nx * vr; f.vz -= nz * vr; }
     }
   }
