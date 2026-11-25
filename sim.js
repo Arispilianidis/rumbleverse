@@ -228,7 +228,9 @@ function integrate(S, f) {
       var flying = f.state === 'hit' || f.state === 'down' || f.state === 'guardbreak';
       if (flying && vr > 4.5 && !f.ropeUsed) {
         f.ropeUsed = true; f.vx -= nx * vr * 1.6; f.vz -= nz * vr * 1.6; takeDamage(f, 3);
-        var stunned = f.state === 'hit'; if (stunned) { f.t = 0; f.dur = 1.2; }
+        var stunned = true;                                           // rope = 1.2 s stun, whatever sent them there
+        if (f.state === 'down') { var vx = f.vx, vz = f.vz; toState(f, 'hit', 1.2); f.vx = vx; f.vz = vz; f.ropeUsed = true; }
+        else { f.t = 0; f.dur = 1.2; }
         S.hitstop = Math.max(S.hitstop, 0.06);
         ev(S, { k: 'rope', x: f.x, z: f.z, dmg: 3, stun: stunned, sh: 0.3 });
       } else { f.vx -= nx * vr; f.vz -= nz * vr; }
