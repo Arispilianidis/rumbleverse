@@ -9,7 +9,7 @@ var R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8, rHit: 0.03, rBlock: 0.08, rWhiff: 0.10 },
   light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8, rHit: 0.04, rBlock: 0.12, rWhiff: 0.18 },
-  kick: { start: 0.14, active: 0.08, rec: 0.30, dmg: 6, range: 1.85, stun: 0.5, kb: 14, cost: 5, lunge: 3.5, guard: 10, rHit: 0.04, rBlock: 0.10, rWhiff: 0.16 },
+  kick: { start: 0.14, active: 0.08, rec: 0.30, dmg: 6, range: 1.85, stun: 0.5, kb: 22.4, cost: 5, lunge: 3.5, guard: 10, rHit: 0.04, rBlock: 0.10, rWhiff: 0.16 },
   grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0, rHit: 0, rBlock: 0, rWhiff: 0.22 }
 };
 var ACTS = ['light', 'grab', 'dodge'];
@@ -53,7 +53,7 @@ function newMatch() {
 }
 
 /* ---------- fighter helpers ---------- */
-var HAZARDS = [{ x: 9.5, z: 0, r: 1.9 }, { x: -9.5, z: 0, r: 1.9 }, { x: 0, z: 9.5, r: 1.9 }, { x: 0, z: -9.5, r: 1.9 }];
+var HAZARDS = [];   // none for now; the hazard system (30 dmg when knocked in) is still wired up
 function inHazard(f) { for (var i = 0; i < HAZARDS.length; i++) if (len(f.x - HAZARDS[i].x, f.z - HAZARDS[i].z) < HAZARDS[i].r) return true; return false; }
 function hazardHit(S, f) {
   if (f.hazUsed || !inHazard(f)) return;
