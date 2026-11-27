@@ -5,7 +5,7 @@
 'use strict';
 
 var TICK = 1 / 60;
-var MAX_PODS = 10, POD_GAP = 6, POD_LIFE = 20, POD_FIELD = 3, R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
+var CANCEL_T = 0.05, MAX_PODS = 10, POD_GAP = 6, POD_LIFE = 20, POD_FIELD = 3, R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8, rHit: 0.03, rBlock: 0.08, rWhiff: 0.10 },
   light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8, rHit: 0.04, rBlock: 0.12, rWhiff: 0.18 },
@@ -158,7 +158,9 @@ function update(S, f, inp, foe) {
     }
     k = Math.exp(-7 * dt); f.vx *= k; f.vz *= k;
     if (f.t >= m.start + m.active && !f.res) f.res = f.hitDone ? 'hit' : 'whiff';   // active frames over with no contact = whiff
-    if (f.t >= m.start + m.active + m.rec + (f.res === 'block' ? m.rBlock : f.res === 'hit' ? m.rHit : m.rWhiff)) { if (s === 'light' && f.landed && f.chain < 3) f.chainWin = 0.4; toIdle(f); }
+    if (s === 'light' && f.res === 'hit' && f.chain < 3 && (f.buf === 'light' || f.buf === 'grab') && f.t >= m.start + m.active + CANCEL_T && f.stamina >= MOVES[f.buf].cost) {
+      f.chainWin = 0.4; startAttack(f, f.buf);          // hit-confirmed: the next press cancels the rest of the recovery
+    } else if (f.t >= m.start + m.active + m.rec + (f.res === 'block' ? m.rBlock : f.res === 'hit' ? m.rHit : m.rWhiff)) { if (s === 'light' && f.landed && f.chain < 3) f.chainWin = 0.4; toIdle(f); }
   } else if (s === 'dodge') {
     k = Math.exp(-5 * dt); f.vx *= k; f.vz *= k;
     faceFoe(f, foe, 6);
