@@ -5,7 +5,7 @@
 'use strict';
 
 var TICK = 1 / 60;
-var R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
+var MAX_PODS = 10, POD_GAP = 6, POD_LIFE = 20, POD_FIELD = 3, R_ARENA = 14.1, HAZ_DMG = 30, ROUND_TIME = 60, THROW_T = 0.85;
 var MOVES = {
   light: { start: 0.09, active: 0.07, rec: 0.17, dmg: 6,  range: 1.75, stun: 0.45, kb: 3.2, cost: 5,  lunge: 3.2, guard: 8, rHit: 0.03, rBlock: 0.08, rWhiff: 0.10 },
   light3: { start: 0.20, active: 0.08, rec: 0.32, dmg: 6, range: 1.85, stun: 0.6, kb: 6.5, cost: 5, lunge: 4.0, guard: 8, rHit: 0.04, rBlock: 0.12, rWhiff: 0.18 },
@@ -34,7 +34,7 @@ function newFighter(idx) {
   return {
     idx: idx, x: x, y: 0, z: 0, vx: 0, vz: 0, yaw: x < 0 ? Math.PI / 2 : -Math.PI / 2,
     hp: 100, stamina: 100, stDelay: 0, state: 'idle', t: 0, dur: 0, mv: '', hitDone: false, lunged: false,
-    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false, res: '',
+    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false, res: '', maxHp: 100, atk: 0, pods: 0,
     flash: 0, flashCol: 0, ropeUsed: false, slammed: false, throwU: 0, win: false, ghostT: 0
   };
 }
@@ -43,13 +43,43 @@ function ev(S, o) { o.tick = S.tick; S.ev.push(o); }
 
 function startRound(S) {
   S.f[0] = newFighter(0); S.f[1] = newFighter(1);
-  S.timer = ROUND_TIME; S.phase = 'intro'; S.pt = 0; S.fightShown = false; S.winner = -1; S.hitstop = 0;
+  S.pods = []; S.podT = 5; S.timer = ROUND_TIME; S.phase = 'intro'; S.pt = 0; S.fightShown = false; S.winner = -1; S.hitstop = 0;
   ev(S, { k: 'round', text: (S.wins[0] === 1 && S.wins[1] === 1) ? 'FINAL ROUND' : 'ROUND ' + S.round });
 }
 function newMatch() {
-  var S = { tick: 0, f: [null, null], phase: 'intro', pt: 0, timer: ROUND_TIME, wins: [0, 0], round: 1, winner: -1, hitstop: 0, fightShown: false, ev: [] };
+  var S = { seed: 20240607, pods: [], podT: 5, podId: 0, tick: 0, f: [null, null], phase: 'intro', pt: 0, timer: ROUND_TIME, wins: [0, 0], round: 1, winner: -1, hitstop: 0, fightShown: false, ev: [] };
   startRound(S);
   return S;
+}
+
+/* ---------- pods: green = +10 max health, red = +2 damage per attack; 10 pods per fighter ---------- */
+function rnd(S) { S.seed = (Math.imul(S.seed, 1664525) + 1013904223) >>> 0; return S.seed / 4294967296; }
+function updatePods(S) {
+  var i, p, f;
+  for (i = S.pods.length - 1; i >= 0; i--) { S.pods[i].t += TICK; if (S.pods[i].t > POD_LIFE) S.pods.splice(i, 1); }
+  S.podT -= TICK;
+  if (S.podT <= 0) {
+    S.podT = POD_GAP + rnd(S) * 3;
+    if (S.pods.length < POD_FIELD) {
+      var a = rnd(S) * Math.PI * 2, r = Math.sqrt(rnd(S)) * (R_ARENA - 3), type = rnd(S) < 0.5 ? 'g' : 'r';
+      p = { id: ++S.podId, x: q(Math.cos(a) * r), z: q(Math.sin(a) * r), type: type, t: 0 };
+      S.pods.push(p); ev(S, { k: 'podspawn', x: p.x, z: p.z, id: p.id });
+    }
+  }
+  for (var n = 0; n < 2; n++) {
+    f = S.f[n];
+    if (f.pods >= MAX_PODS || f.state === 'ko') continue;
+    for (i = 0; i < S.pods.length; i++) {
+      p = S.pods[i];
+      if (len(f.x - p.x, f.z - p.z) < 1.1) {
+        f.pods++;
+        if (p.type === 'g') { f.maxHp += 10; f.hp += 10; } else f.atk += 2;
+        S.pods.splice(i, 1);
+        ev(S, { k: 'pod', type: p.type, x: p.x, z: p.z, d: f.idx, id: p.id });
+        break;
+      }
+    }
+  }
 }
 
 /* ---------- fighter helpers ---------- */
@@ -152,10 +182,10 @@ function update(S, f, inp, foe) {
     } else if (!f.slammed) {
       f.slammed = true;
       var r = len(D.x, D.z); if (r > R_ARENA) { D.x *= R_ARENA / r; D.z *= R_ARENA / r; }
-      D.y = 0; D.hazUsed = false; takeDamage(D, 14); toState(D, 'down', 1.3); D.vx = 0; D.vz = 0;
+      D.y = 0; D.hazUsed = false; takeDamage(D, 14 + f.atk); toState(D, 'down', 1.3); D.vx = 0; D.vz = 0;
       S.hitstop = Math.max(S.hitstop, 0.14);
       f.comboN = 1; f.comboT = 0;
-      ev(S, { k: 'slam', x: D.x, z: D.z, dmg: 14, d: D.idx, sh: 0.55 });
+      ev(S, { k: 'slam', x: D.x, z: D.z, dmg: 14 + f.atk, d: D.idx, sh: 0.55 });
       hazardHit(S, D);
     }
     if (f.t >= THROW_T + 0.3) toIdle(f);
@@ -199,7 +229,7 @@ function strike(S, A, D, snap) {
     return;
   }
   D.combo++; A.landed = true; A.res = 'hit';
-  var dmg = Math.max(1, Math.round(mv.dmg * Math.max(0.4, 1 - 0.18 * (D.combo - 1))));
+  var dmg = Math.max(1, Math.round(mv.dmg * Math.max(0.4, 1 - 0.18 * (D.combo - 1)))) + A.atk;
   takeDamage(D, dmg);
   A.comboN = D.combo; A.comboT = 1.3;
   var kick = A.state === 'kick', fin = A.state === 'light' && A.chain >= 3, down = fin, combo = D.combo, rem = D.state === 'hit' ? Math.max(0, D.dur - D.t) : 0;
@@ -291,7 +321,7 @@ function step(S, in0, in1) {
     if (!S.fightShown && S.pt > 1.0) { S.fightShown = true; ev(S, { k: 'fight' }); }
     if (S.pt > 1.5) { S.phase = 'fight'; S.pt = 0; }
   } else if (S.phase === 'fight') {
-    S.timer -= TICK;
+    S.timer -= TICK; updatePods(S);
     if (F[0].hp <= 0 || F[1].hp <= 0) endRound(S, 'ko');
     else if (S.timer <= 0) { S.timer = 0; endRound(S, 'time'); }
   } else if (S.phase === 'ko') {
@@ -309,14 +339,14 @@ function hash(S) {
   var h = 2166136261 >>> 0;
   function mix(n) { h ^= (Math.round(n * 1000) | 0); h = Math.imul(h, 16777619) >>> 0; }
   function str(s) { for (var i = 0; i < s.length; i++) mix(s.charCodeAt(i)); }
-  mix(S.tick); mix(S.timer); mix(S.round); mix(S.wins[0]); mix(S.wins[1]); str(S.phase);
+  mix(S.tick); mix(S.timer); mix(S.round); mix(S.wins[0]); mix(S.wins[1]); mix(S.seed % 100000); mix(S.pods.length); str(S.phase);
   for (var i = 0; i < 2; i++) {
     var f = S.f[i];
-    mix(f.x); mix(f.z); mix(f.vx); mix(f.vz); mix(f.yaw); mix(f.hp); mix(f.stamina); mix(f.t); mix(f.combo); str(f.state);
+    mix(f.x); mix(f.z); mix(f.vx); mix(f.vz); mix(f.yaw); mix(f.hp); mix(f.maxHp); mix(f.atk); mix(f.stamina); mix(f.t); mix(f.combo); str(f.state);
   }
   return h >>> 0;
 }
 
-var API = { TICK: TICK, MOVES: MOVES, THROW_T: THROW_T, R_ARENA: R_ARENA, HAZARDS: HAZARDS, ROUND_TIME: ROUND_TIME, BLANK: BLANK, newMatch: newMatch, step: step, clone: clone, hash: hash, quantInput: quantInput };
+var API = { TICK: TICK, MOVES: MOVES, THROW_T: THROW_T, R_ARENA: R_ARENA, MAX_PODS: MAX_PODS, HAZARDS: HAZARDS, ROUND_TIME: ROUND_TIME, BLANK: BLANK, newMatch: newMatch, step: step, clone: clone, hash: hash, quantInput: quantInput };
 if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.RRSim = API;
 })(typeof window !== 'undefined' ? window : this);

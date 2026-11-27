@@ -52,6 +52,8 @@ body {
 .pips b.on { background: currentColor; box-shadow: 0 0 10px currentColor; }
 .hp { position: relative; height: clamp(18px, 3vw, 28px); background: rgba(10, 6, 24, .7); border: 3px solid var(--edge); border-radius: 6px; overflow: hidden; transform: skewX(-12deg); }
 .p2 .hp { transform: skewX(12deg); }
+.pods { font: 700 12px/1 system-ui, sans-serif; letter-spacing: .04em; color: #fff; min-height: 14px; margin-top: 5px; text-shadow: 0 1px 2px #000; }
+.pods b { color: #4dff8a; margin-right: 8px; } .pods u { text-decoration: none; color: #ff6b6b; }
 .hp i { position: absolute; top: 0; bottom: 0; display: block; }
 .p1 .hp i { left: 0; }
 .p2 .hp i { right: 0; }
@@ -166,6 +168,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <div class="who"><span id="n0">P1</span><span class="pips" id="pips0"><b></b><b></b></span></div>
       <div class="hp"><i class="ghost" id="g0"></i><i class="fill" id="h0"></i></div>
       <div class="st" id="st0"><i></i></div>
+      <div class="pods" id="pd0"></div>
       <div class="combo" id="c0"></div>
     </div>
     <div class="clock" id="clock">60</div>
@@ -173,6 +176,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <div class="who"><span id="n1">P2</span><span class="pips" id="pips1"><b></b><b></b></span></div>
       <div class="hp"><i class="ghost" id="g1"></i><i class="fill" id="h1"></i></div>
       <div class="st" id="st1"><i></i></div>
+      <div class="pods" id="pd1"></div>
       <div class="combo" id="c1"></div>
     </div>
   </div>
@@ -217,7 +221,7 @@ body.padnav #menu :focus { outline: 3px solid var(--ink); outline-offset: 3px; }
       <span>Block (hold)</span><span><kbd>R</kbd></span><span><kbd>Right Shift</kbd></span>
       <span>Dodge</span><span><kbd>Space</kbd></span><span><kbd>Enter</kbd></span>
     </div>
-    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Attack</b> then <b>Grab</b>: hook into a kick that sends them flying; into the ropes means a stun.</span><span><b>Attack, Attack, Grab</b>: two hooks then the throw over your head.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span></p>
+    <p class="rps"><span><b>Attack</b> three times in a row: left hook, right hook, then a finisher that knocks down.</span><span><b>Attack</b> then <b>Grab</b>: hook into a kick that sends them flying; into the ropes means a stun.</span><span><b>Attack, Attack, Grab</b>: two hooks then the throw over your head.</span><span><b>Dodge</b> has a short invulnerable window and costs stamina.</span><span>Knock someone into the ropes for bonus damage.</span><span>Glowing pods drop in the ring: <b>green</b> +10 max health, <b>red</b> +2 damage on every attack. Up to 10 pods per round.</span></p>
     <p class="fine">Controller: stick or D-pad to move, X attack, B grab, A dodge, bumpers or triggers to block. In menus use the D-pad and A, B goes back. Start rematches, Back leaves a match. Keyboard: Esc leaves, M mutes.</p>
   </div>
 </div>
@@ -368,6 +372,27 @@ var hazMats = [];
   });
 })();
 
+/* pods: green = +10 max health, red = +2 damage per attack */
+var podMeshes = {};
+var podGeo = new THREE.SphereGeometry(0.42, 18, 14), podRing = new THREE.TorusGeometry(0.62, 0.05, 8, 28);
+var podMat = { g: new THREE.MeshStandardMaterial({ color: 0x2bd96b, emissive: 0x2bd96b, emissiveIntensity: 0.9, roughness: 0.3 }), r: new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff3b3b, emissiveIntensity: 0.9, roughness: 0.3 }) };
+function syncPods(now) {
+  var seen = {}, i, p, m;
+  for (i = 0; i < S.pods.length; i++) {
+    p = S.pods[i]; seen[p.id] = 1; m = podMeshes[p.id];
+    if (!m) {
+      m = podMeshes[p.id] = new THREE.Group();
+      m.add(new THREE.Mesh(podGeo, podMat[p.type]));
+      var rg = new THREE.Mesh(podRing, podMat[p.type]); rg.rotation.x = Math.PI / 2; m.add(rg);
+      var pl = new THREE.PointLight(p.type === 'g' ? 0x2bd96b : 0xff3b3b, 0.9, 6); m.add(pl);
+      scene.add(m);
+    }
+    var fade = p.t > 16 ? (Math.sin(now * 0.02) > 0 ? 1 : 0.2) : 1;
+    m.position.set(p.x, 0.95 + Math.sin(now * 0.004 + p.id) * 0.18, p.z); m.rotation.y = now * 0.002; m.scale.setScalar(fade);
+  }
+  for (var id in podMeshes) if (!seen[id]) { scene.remove(podMeshes[id]); delete podMeshes[id]; }
+}
+
 /* skyline */
 (function city() {
   function winTex(w, h, seed) {
@@ -509,6 +534,7 @@ var sfx = {
 var Sim = window.RRSim, Net = window.RRNet, TICK = Sim.TICK, BLANK = Sim.BLANK;
 MOVES = Sim.MOVES; THROW_T = Sim.THROW_T;
 var S = Sim.newMatch();
+Object.defineProperty(window, '__rrState', { get: function () { return S; } });   // test hook
 
 function View(idx, col, acc, style) {
   this.idx = idx; this.m = buildModel(col, acc, style); this.walkPh = 0; this.ghost = 100;
@@ -560,7 +586,9 @@ function playEvents(list) {
       case 'tech': popup('TECH!', e, 'blk'); sfx.block(); burst(v3(e.x, 1.3, e.z), 8, 0xffffff, 5, 2); break;
       case 'grab': popup('GRABBED!', e, 'big'); sfx.hit(false); break;
       case 'hazard': burst(v3(e.x, 0.5, e.z), 22, 0xff4a1a, 8, 5); wave(v3(e.x, 0, e.z), 0xff3a1a, 16); sfx.slam(); popup('HAZARD! 30', e, 'big'); break;
-      case 'slam': burst(v3(e.x, 0.3, e.z), 18, 0xd9d0f5, 7, 4); wave(v3(e.x, 0, e.z), 0xffffff, 14); sfx.slam(); popup('14', e, 'big'); break;
+      case 'podspawn': burst(v3(e.x, 0.8, e.z), 10, 0xffffff, 4, 2); break;
+      case 'pod': burst(v3(e.x, 0.8, e.z), 16, e.type === 'g' ? 0x4dff8a : 0xff4d4d, 6, 4); wave(v3(e.x, 0, e.z), e.type === 'g' ? 0x4dff8a : 0xff4d4d, 8); sfx.block(); popup(e.type === 'g' ? 'MAX HP +10' : 'ATTACK +2', { x: e.x, z: e.z }, 'big'); break;
+      case 'slam': burst(v3(e.x, 0.3, e.z), 18, 0xd9d0f5, 7, 4); wave(v3(e.x, 0, e.z), 0xffffff, 14); sfx.slam(); popup(String(e.dmg), e, 'big'); break;
       case 'rope': burst(v3(e.x, 1.2, e.z), 8, 0xff3d6e, 5, 3); sfx.hit(false); popup(e.stun ? 'ROPE STUN! 3' : 'ROPES! 3', e, 'big'); break;
     }
   }
@@ -720,7 +748,9 @@ function hudUpdate(dt) {
     var f = S.f[i], v = views[i];
     if (f.ghostT <= 0 && v.ghost > f.hp) v.ghost = Math.max(f.hp, v.ghost - 40 * dt);
     if (v.ghost < f.hp) v.ghost = f.hp;
-    $('h' + i).style.width = f.hp + '%'; $('g' + i).style.width = v.ghost + '%';
+    var mh = f.maxHp || 100;
+    $('h' + i).style.width = Math.min(100, f.hp / mh * 100) + '%'; $('g' + i).style.width = Math.min(100, v.ghost / mh * 100) + '%';
+    $('pd' + i).innerHTML = f.pods ? '<b>♥ ' + mh + '</b><u>⚔ +' + f.atk + '</u>  ' + f.pods + '/' + Sim.MAX_PODS : '';
     var st = $('st' + i); st.firstElementChild.style.width = f.stamina + '%';
     st.classList.toggle('low', f.stamina < 25 || f.state === 'guardbreak');
     var c = $('c' + i), on = f.comboT > 0 && f.comboN >= 2;
@@ -834,6 +864,7 @@ function frame(nowMs) {
   }
   if (G.net) S = G.net.state();
   G.shake *= Math.exp(-9 * rdt);
+  syncPods(now);
   for (var i = 0; i < 2; i++) poseFighter(views[i], S.f[i], rdt, now);
   updateFx(rdt);
   updateCamera(rdt);
