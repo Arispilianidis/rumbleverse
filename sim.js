@@ -52,7 +52,7 @@ function newMatch() {
   return S;
 }
 
-/* ---------- pods: green = +10 max health, red = +2 damage per attack; 10 pods per fighter ---------- */
+/* ---------- pods: green = +10 max health, red = +1 damage per attack; 10 pods per fighter ---------- */
 function rnd(S) { S.seed = (Math.imul(S.seed, 1664525) + 1013904223) >>> 0; return S.seed / 4294967296; }
 function updatePods(S) {
   var i, p, f;
@@ -73,7 +73,7 @@ function updatePods(S) {
       p = S.pods[i];
       if (len(f.x - p.x, f.z - p.z) < 1.1) {
         f.pods++;
-        if (p.type === 'g') { f.maxHp += 10; f.hp += 10; } else f.atk += 2;
+        if (p.type === 'g') { f.maxHp += 10; f.hp += 10; } else f.atk += 1;
         S.pods.splice(i, 1);
         ev(S, { k: 'pod', type: p.type, x: p.x, z: p.z, d: f.idx, id: p.id });
         break;
