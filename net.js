@@ -7,13 +7,13 @@
 (function (root) {
 'use strict';
 
-var EDGE = 2 | 4 | 8 | 16;       // light, (bit 4 unused), grab, dodge are one-tick presses and are never predicted
+var EDGE = 2 | 8 | 16;           // light, grab, dodge are one-tick presses and are never predicted (block 1 and sprint 4 are held, so they are)
 function enc(i) {
   var mx = Math.round(i.mx * 64) + 64, mz = Math.round(i.mz * 64) + 64;
-  return (mx << 13) | (mz << 5) | (i.block ? 1 : 0) | (i.light ? 2 : 0) | (i.grab ? 8 : 0) | (i.dodge ? 16 : 0);
+  return (mx << 13) | (mz << 5) | (i.block ? 1 : 0) | (i.sprint ? 4 : 0) | (i.light ? 2 : 0) | (i.grab ? 8 : 0) | (i.dodge ? 16 : 0);
 }
 function dec(n) {
-  return { mx: (((n >> 13) & 255) - 64) / 64, mz: (((n >> 5) & 255) - 64) / 64, block: !!(n & 1), light: !!(n & 2), grab: !!(n & 8), dodge: !!(n & 16) };
+  return { mx: (((n >> 13) & 255) - 64) / 64, mz: (((n >> 5) & 255) - 64) / 64, block: !!(n & 1), sprint: !!(n & 4), light: !!(n & 2), grab: !!(n & 8), dodge: !!(n & 16) };
 }
 
 function create(o) {

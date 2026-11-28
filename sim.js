@@ -13,7 +13,7 @@ var MOVES = {
   grab:  { start: 0.16, active: 0.08, rec: 0.50, dmg: 0,  range: 1.45, stun: 0,    kb: 0,   cost: 0,  lunge: 3.0, guard: 0, rHit: 0, rBlock: 0, rWhiff: 0.22 }
 };
 var ACTS = ['light', 'grab', 'dodge'];
-var BLANK = Object.freeze({ mx: 0, mz: 0, block: false, light: false, grab: false, dodge: false });
+var BLANK = Object.freeze({ mx: 0, mz: 0, block: false, sprint: false, light: false, grab: false, dodge: false });
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -25,7 +25,7 @@ function q(v) { return Math.round(v * 1e6) / 1e6; }   // trims cross-engine floa
 function quantInput(i) {
   return {
     mx: Math.round(clamp(i.mx || 0, -1, 1) * 64) / 64, mz: Math.round(clamp(i.mz || 0, -1, 1) * 64) / 64,
-    block: !!i.block, light: !!i.light, grab: !!i.grab, dodge: !!i.dodge
+    block: !!i.block, sprint: !!i.sprint, light: !!i.light, grab: !!i.grab, dodge: !!i.dodge
   };
 }
 
@@ -34,7 +34,7 @@ function newFighter(idx) {
   return {
     idx: idx, x: x, y: 0, z: 0, vx: 0, vz: 0, yaw: x < 0 ? Math.PI / 2 : -Math.PI / 2,
     hp: 100, stamina: 100, stDelay: 0, state: 'idle', t: 0, dur: 0, mv: '', hitDone: false, lunged: false,
-    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false, res: '', maxHp: 100, atk: 0, pods: 0,
+    invuln: 0, blocking: false, combo: 0, comboN: 0, comboT: 0, buf: '', bufT: 0, dodgeCD: 0, punchSide: 1, chain: 0, chainWin: 0, landed: false, cgrab: false, hazUsed: false, res: '', sprint: false, maxHp: 100, atk: 0, pods: 0,
     flash: 0, flashCol: 0, ropeUsed: false, slammed: false, throwU: 0, win: false, ghostT: 0
   };
 }
@@ -125,7 +125,7 @@ function startDodge(S, f, inp, foe) {
 
 function update(S, f, inp, foe) {
   var dt = TICK, s = f.state, k;
-  f.t += dt;
+  f.t += dt; f.sprint = false;
   if (f.invuln > 0) f.invuln -= dt;
   if (f.dodgeCD > 0) f.dodgeCD -= dt;
   if (f.chainWin > 0) f.chainWin -= dt;
@@ -139,6 +139,9 @@ function update(S, f, inp, foe) {
   if (s === 'idle') {
     f.blocking = !!inp.block && f.stamina > 0;
     var sp = f.blocking ? 2.4 : 5.6;
+    if (inp.sprint && !f.blocking && f.stamina > 8 && Math.abs(inp.mx) + Math.abs(inp.mz) > 0.3) {   // sprint: +50% speed, drains stamina
+      f.sprint = true; sp = 8.4; f.stamina = Math.max(0, f.stamina - 20 * dt); f.stDelay = Math.max(f.stDelay, 0.5);
+    }
     k = 1 - Math.exp(-18 * dt);
     f.vx += (inp.mx * sp - f.vx) * k; f.vz += (inp.mz * sp - f.vz) * k;
     faceFoe(f, foe, 18);
